@@ -1,98 +1,54 @@
-import { useEffect, useState } from 'react';
-
-export type TTradeData = {
-	s: string; // Symbol
-	p: number; // Price
-	t: number; // UNIX milliseconds timestamp
-	v: number; // Volume
-	c: number[]; // List of trade conditions
-};
+import { VariableSizeList as List } from 'react-window';
+import useTrades from './hooks/useTrades';
 
 function App() {
-	const [trades, setTrades] = useState<TTradeData[]>([]);
-	const [currentPage, setCurrentPage] = useState(1);
-	const itemsPerPage = 10;
-
-	useEffect(() => {
-		const websocket = new WebSocket(
-			`wss://ws.finnhub.io?token=${import.meta.env.VITE_FINNHUB_API_KEY}`,
-		);
-
-		websocket.onopen = () => {
-			websocket.send(JSON.stringify({ type: 'subscribe', symbol: 'AAPL' }));
-		};
-
-		websocket.onmessage = async (event) => {
-			const response = JSON.parse(await event.data);
-
-			const { data, type } = response;
-
-			debugger;
-
-			if (type === 'trade') {
-				setTrades((prevTrades) => {
-					const newTrades = [...prevTrades, ...data];
-
-					// calculate the new total number of pages
-					const newTotalPages = Math.ceil(newTrades.length / itemsPerPage);
-
-					// set the current page to the newest page with data
-					setCurrentPage(newTotalPages);
-
-					return newTrades;
-				});
-			}
-		};
-	}, []);
-
-	const lastPageIndex = currentPage * itemsPerPage;
-	const firstPageIndex = lastPageIndex - itemsPerPage;
-	const currentTrades = trades.slice(firstPageIndex, lastPageIndex);
-
-	const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
+	const {
+		listRef,
+		trades,
+		toggleAutoScroll,
+		toggleWebsocketConnection,
+		setToggleAutoScroll,
+		setToggleWebsocketConnection,
+		getItemSize,
+		Row,
+	} = useTrades();
 
 	return (
 		<main className="flex min-h-screen flex-col items-center gap-10 p-20">
 			<h1 className="text-6xl">AAPL Trades</h1>
 
-			<section>
-				{currentTrades.length > 0 && (
-					<ul className="flex w-96 flex-col gap-5 rounded-lg border border-gray-300 p-5">
-						{currentTrades.map((trade) => {
-							const date = new Date(trade.t);
+			<section className="flex gap-4">
+				<button
+					className={`rounded px-4 py-2 text-white transition-colors ${toggleWebsocketConnection ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'}`}
+					onClick={() =>
+						setToggleWebsocketConnection(!toggleWebsocketConnection)
+					}
+				>
+					{toggleWebsocketConnection ? 'Disconnect' : 'Re-connect'}
+				</button>
 
-							const hours = date.getHours();
-							const minutes = date.getMinutes();
-							const seconds = date.getSeconds();
+				<button
+					className={`rounded px-4 py-2 text-white transition-colors ${toggleAutoScroll ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'}`}
+					onClick={() => setToggleAutoScroll(!toggleAutoScroll)}
+				>
+					{toggleAutoScroll ? 'Disable Auto-Scroll' : 'Enable Auto-Scroll'}
+				</button>
+			</section>
 
-							const timeString = `${hours}:${minutes}:${seconds}`;
+			<p># of trades: {trades.length}</p>
 
-							return (
-								<li key={`${trade.t}-${trade.p}-${trade.v}`}>
-									<p>TIME: {timeString}</p>
-									<p>SYMBOL: {trade.s}</p>
-									<p>PRICE: ${trade.p}</p>
-									<p>VOLUME: {trade.v}</p>
-								</li>
-							);
-						})}
-					</ul>
+			<section className="border border-gray-300">
+				{trades.length > 0 && (
+					<List
+						ref={listRef}
+						height={500}
+						width={600}
+						itemCount={trades.length}
+						itemSize={getItemSize}
+					>
+						{Row}
+					</List>
 				)}
-
-				<div>
-					{Array.from(
-						{ length: Math.ceil(trades.length / itemsPerPage) },
-						(_, i) => i + 1,
-					).map((number) => (
-						<button
-							className={`border px-3 py-1 ${currentPage === number ? 'bg-gray-300' : ''}`}
-							key={number}
-							onClick={() => paginate(number)}
-						>
-							{number}
-						</button>
-					))}
-				</div>
 			</section>
 		</main>
 	);
